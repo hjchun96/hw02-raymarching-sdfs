@@ -4,6 +4,8 @@ precision highp float;
 // The vertex shader used to render the background of the scene
 uniform float u_Time;
 // uniform mat4 u_Model;
+uniform float u_Bikespeed;
+uniform float u_Background;
 
 in vec4 vs_Pos;
 out vec2 fs_Pos;

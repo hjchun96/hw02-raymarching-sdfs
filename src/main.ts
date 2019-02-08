@@ -81,7 +81,7 @@ function main() {
     // Use this if you wish
   }
 
-  let prevBikespeed = 4;
+  let prevBikespeed = 2.0;
   let prevSpeed_type = 'Medium';
   let prevBackground = 4;
   let prevBackground_type = 'Medium';
@@ -105,13 +105,13 @@ function main() {
 
       switch(prevSpeed_type) {
         case "High":
-          bikespeed = 3;
+          bikespeed = 3.0;
           break;
         case "Medium":
-          bikespeed = 2;
+          bikespeed = 2.0;
           break;
         case "Low":
-          bikespeed = 1;
+          bikespeed = 1.0;
           break;
       }
       prevBikespeed = bikespeed;

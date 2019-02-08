@@ -4,8 +4,8 @@ precision highp float;
 uniform vec3 u_Eye, u_Ref, u_Up;
 uniform vec2 u_Dimensions;
 uniform float u_Time;
-uniform int u_Bikespeed;
-uniform int u_Background;
+uniform float u_Bikespeed;
+uniform float u_Background;
 
 in vec2 fs_Pos;
 in vec4 fs_LightVec;
@@ -174,7 +174,7 @@ vec3 preProcessPnt(vec3 pnt) {
 float sceneSDF(vec3 pnt) { // map fctn
 
 	pnt = preProcessPnt(pnt);
-	vec3 timeOffset = vec3(0.0, 0.0, sin(0.5* u_Time/10.0) * 0.1);
+	vec3 timeOffset = vec3(0.0, 0.0, sin(u_Bikespeed * 0.3 * u_Time) * 0.1);
 
   // Define Components and Position
   float handle = opSmoothUnion(sdSphere(pnt - timeOffset + vec3(1.5, 0.0, 0.0), 1.0), 
@@ -199,7 +199,7 @@ float sceneSDF(vec3 pnt) { // map fctn
 
 	for (int i = 0; i < 30; i++)  {
 		float block_bool = square_wave(1.0, 1.0, 5.0);
-		float x_displacement = -30.0 + block_bool * 1.2 * float(i) + mod(u_Time, 10.0) * 0.9;
+		float x_displacement = -30.0 + block_bool * 1.2 * float(i) + mod(u_Time, 10.0) * u_Bikespeed/2.0;
   	float block = sdBox(pnt - vec3(x_displacement, 0.0, 7.0) , vec3(1.0, 1.0, 0.4));
   	res = opU(res, block);
 	} 
