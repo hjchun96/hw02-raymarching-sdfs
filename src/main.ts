@@ -12,6 +12,8 @@ import ShaderProgram, {Shader} from './rendering/gl/ShaderProgram';
 const controls = {
   tesselations: 5,
   'Load Scene': loadScene, // A function pointer, essentially
+  'Bikespeed': 'Medium',
+  'Background': 'Rainbow',
 };
 
 let square: Square;
@@ -47,6 +49,9 @@ function main() {
 
   // Add controls to the gui
   const gui = new DAT.GUI();
+  gui.add(controls, 'Bikespeed', [ 'High', 'Medium', 'Low' ] );
+  gui.add(controls, 'Background', [ 'Rainbow', 'Dark', 'Low' ] );
+
 
   // get canvas and webgl context
   const canvas = <HTMLCanvasElement> document.getElementById('canvas');
@@ -76,16 +81,63 @@ function main() {
     // Use this if you wish
   }
 
+  let prevBikespeed = 4;
+  let prevSpeed_type = 'Medium';
+  let prevBackground = 4;
+  let prevBackground_type = 'Medium';
+  let time = 0;
+
   // This function will be called every frame
   function tick() {
+
+
+    let bikespeed = prevBikespeed;
+    let background = prevBackground;
     camera.update();
     stats.begin();
     gl.viewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.clear();
     processKeyPresses();
+
+    if(controls.Bikespeed != prevSpeed_type)
+    {
+      prevSpeed_type = controls.Bikespeed;
+
+      switch(prevSpeed_type) {
+        case "High":
+          bikespeed = 3;
+          break;
+        case "Medium":
+          bikespeed = 2;
+          break;
+        case "Low":
+          bikespeed = 1;
+          break;
+      }
+      prevBikespeed = bikespeed;
+    }
+
+    if(controls.Background != prevBackground_type)
+    {
+      prevBackground_type = controls.Background;
+
+      switch(prevBackground_type) {
+        case "High":
+          background = 3;
+          break;
+        case "Medium":
+          background = 2;
+          break;
+        case "Rainbow":
+          background = 1;
+          break;
+      }
+      prevBackground = background;
+    }
+
     renderer.render(camera, flat, [
       square,
-    ], time);
+    ], time, bikespeed, background);
     time++;
     stats.end();
 

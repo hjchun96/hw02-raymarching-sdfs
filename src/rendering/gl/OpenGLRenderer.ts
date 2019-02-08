@@ -22,10 +22,12 @@ class OpenGLRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   }
 
-  render(camera: Camera, prog: ShaderProgram, drawables: Array<Drawable>, time: number) {
+  render(camera: Camera, prog: ShaderProgram, drawables: Array<Drawable>, time: number, bikespeed: number, background: number ) {
     prog.setEyeRefUp(camera.controls.eye, camera.controls.center, camera.controls.up);
     prog.setTime(time);
-
+    prog.setBikespeed(bikespeed);
+    prog.setBackground(background);
+    
     for (let drawable of drawables) {
       prog.draw(drawable);
     }
