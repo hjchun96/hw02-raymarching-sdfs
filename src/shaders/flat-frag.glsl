@@ -5,7 +5,7 @@ uniform vec3 u_Eye, u_Ref, u_Up;
 uniform vec2 u_Dimensions;
 uniform float u_Time;
 uniform float u_Bikespeed;
-uniform float u_Background;
+uniform float u_Lighting;
 
 in vec2 fs_Pos;
 in vec4 fs_LightVec;
@@ -135,21 +135,7 @@ float opOnion( in float sdf, in float thickness )
     return abs(sdf)-thickness;
 }
 
-// float opDisplace( in sdf3d primitive, in vec3 p )
-// {
-//     float d1 = primitive(p);
-//     float d2 = displacement(p);
-//     return d1+d2;
-// }
-
-
-// 	float opRep( in vec3 p, in vec3 c, in sdf3d primitive )
-// {
-//     vec3 q = mod(p,c)-0.5*c;
-//     return primitve( q );
-// }
-
-
+// ------- Toolbox Functions ------- //
 float impulse( float k, float x )
 {
     float h = k*x;
@@ -174,16 +160,18 @@ vec3 preProcessPnt(vec3 pnt) {
 float sceneSDF(vec3 pnt) { // map fctn
 
 	pnt = preProcessPnt(pnt);
-	vec3 timeOffset = vec3(0.0, 0.0, sin(u_Bikespeed * 0.3 * u_Time) * 0.1);
+	float timeVar =sin(u_Bikespeed * 0.3 * u_Time); 
+	vec3 timeOffset = vec3(0.0, 0.0, timeVar * 0.1);
+	float wheelSizeOffset = u_Bikespeed * timeVar * -0.2;
 
   // Define Components and Position
   float handle = opSmoothUnion(sdSphere(pnt - timeOffset + vec3(1.5, 0.0, 0.0), 1.0), 
   														 sdRoundedCylinder(pnt - timeOffset + vec3(1.5, 0.0, 0.0), 0.1, 0.1, 2.0), 0.7);
   float neck = sdRoundBox(rotateY(-0.3) * opCheapBend(pnt) - timeOffset - vec3(0.0, 0.0, 0.5), vec3(1.0, 0.2, 0.0), 0.3);
-  float wheel1 = sdTorus(pnt + timeOffset - vec3(4.0, 0.0, 3.2), vec2(1.2,0.2));
+  float wheel1 = sdTorus(pnt + timeOffset - vec3(4.0, 0.0, 3.2), vec2(1.0 + wheelSizeOffset, 0.2));
   float pipe1 = sdCapsule(pnt + timeOffset - vec3(2.0, 0.0, 1.0), vec3(2.0, 0.0, 2.2), vec3(1.0, 0.0, 0.0), 0.2);
   float seat = sdRoundBox(pnt - timeOffset - vec3(2.0, 0.0, 1.0), vec3(1.0, 0.3, 0.0), 0.7);
-  float wheel2 = sdTorus(pnt  + timeOffset - vec3(0.0, 0.0, 3.2), vec2(1.2,0.2));
+  float wheel2 = sdTorus(pnt  + timeOffset - vec3(0.0, 0.0, 3.2), vec2(1.0 +  wheelSizeOffset, 0.2));
   float pipe2 = sdCapsule(pnt + timeOffset - vec3(2.0, 0.0, 1.0), vec3(-1.0, 0.0, 0.0), vec3(-2.0, 0.0, 2.2), 0.2);
 
 
@@ -306,6 +294,7 @@ vec3 ProceduralTexture(vec2 uv){
 void main() {
 
 	IS_PLANE = 0;
+	float ambiance = 0.3;
 
 	// vec2 uv = gl_FragCoord.xy / u_Dimensions;
 	// if (uv.y < 0.2) {
@@ -321,9 +310,6 @@ void main() {
 	//***  Set up Ray Direction  ***//
 	vec3 p = calculateRayMarchPoint();
 	vec3 dir = normalize(p - u_Eye);
-	// out_Col = vec4(0.5 * (dir + vec3(1.0, 1.0, 1.0)), 1);
-	// return;
-	// vec3 col = 0.5 * (dir + vec3(1.0, 1.0, 1.0));
 
   //***  Ray Marching  ***//
 	float dist = raymarch(u_Eye, dir, MIN_DIST, MAX_DIST);
@@ -332,19 +318,18 @@ void main() {
   	return;
   }
 
+  vec3 lightDirection = normalize(vec3(fs_LightVec.xyz));
+
   if (dist <= MAX_DIST - EPSILON) {
     // Hit Something!
     vec3 n = estimateNormal(u_Eye + dist * dir);
-    float light = dot(-fs_LightVec.xyz, n);
-    // vec4 col = vec4(128.0/255.0, 128.0/255.0, 128.0/255.0, 2.0);
+    float light = dot(-fs_LightVec.xyz, n); // Lambertian Reflective Lighting
     vec4 col = vec4(0.1, 0.1, 0.1, 1.0);
-
-    //vec2 objUv = GetUVs();
-    if (dist < 0.2) {
-
+    if (u_Lighting > 0.0) {
+    	out_Col = col * light * ambiance + vec4(0.1, 0.2, 0.4, 0.1);
+    } else {
+    	out_Col = vec4(n, 1);
     }
-    // vec4 ret = col * light;
-    out_Col = vec4(n, 1);
 		return;
   }
 

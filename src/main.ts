@@ -13,7 +13,7 @@ const controls = {
   tesselations: 5,
   'Load Scene': loadScene, // A function pointer, essentially
   'Bikespeed': 'Medium',
-  'Background': 'Rainbow',
+  'Lighting': 'Yes',
 };
 
 let square: Square;
@@ -49,8 +49,8 @@ function main() {
 
   // Add controls to the gui
   const gui = new DAT.GUI();
-  gui.add(controls, 'Bikespeed', [ 'High', 'Medium', 'Low' ] );
-  gui.add(controls, 'Background', [ 'Rainbow', 'Dark', 'Low' ] );
+  gui.add(controls, 'Bikespeed', [ 'High', 'Medium', 'Low', 'Stop' ] );
+  gui.add(controls, 'Lighting', [ 'Yes', 'No'] );
 
 
   // get canvas and webgl context
@@ -83,8 +83,8 @@ function main() {
 
   let prevBikespeed = 2.0;
   let prevSpeed_type = 'Medium';
-  let prevBackground = 4;
-  let prevBackground_type = 'Medium';
+  let prevLighting = 4;
+  let prevLighting_type = 'Medium';
   let time = 0;
 
   // This function will be called every frame
@@ -92,7 +92,7 @@ function main() {
 
 
     let bikespeed = prevBikespeed;
-    let background = prevBackground;
+    let lighting = prevLighting;
     camera.update();
     stats.begin();
     gl.viewport(0, 0, window.innerWidth, window.innerHeight);
@@ -112,32 +112,31 @@ function main() {
           break;
         case "Low":
           bikespeed = 1.0;
+        case "Stop":
+          bikespeed = 0.0;
           break;
       }
       prevBikespeed = bikespeed;
     }
 
-    if(controls.Background != prevBackground_type)
+    if(controls.Lighting != prevLighting_type)
     {
-      prevBackground_type = controls.Background;
+      prevLighting_type = controls.Lighting;
 
-      switch(prevBackground_type) {
-        case "High":
-          background = 3;
+      switch(prevLighting_type) {
+        case "Yes":
+          lighting = 1;
           break;
-        case "Medium":
-          background = 2;
-          break;
-        case "Rainbow":
-          background = 1;
+        case "No":
+          lighting = 0;
           break;
       }
-      prevBackground = background;
+      prevLighting = lighting;
     }
 
     renderer.render(camera, flat, [
       square,
-    ], time, bikespeed, background);
+    ], time, bikespeed, lighting);
     time++;
     stats.end();
 
