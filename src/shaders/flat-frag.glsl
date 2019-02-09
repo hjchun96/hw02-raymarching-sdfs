@@ -18,6 +18,10 @@ const float MIN_DIST = 0.0;
 const float MAX_DIST = 100.0;
 const float EPSILON = 0.0001;
 int IS_PLANE;
+float plane_dist;
+
+// int IS_BLOCK;
+// float block_dist[30];
 
 // ------- Primatives ------- //
 // All taken from IQ: http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
@@ -46,7 +50,6 @@ float sdRoundBox( vec3 p, vec3 b, float r )
          + min(max(d.x,max(d.y,d.z)),0.0); // remove this line for an only partially signed sdf 
 }
 
-
 float sdBox( vec3 p, vec3 b )
 {
   vec3 d = abs(p) - b;
@@ -67,21 +70,6 @@ float sdPlane( vec3 p, vec4 n )
   return dot(p,n.xyz) + n.w;
 }
 
-
-// float calcAO(vec3 pos, vec3 nor )
-// {
-// 	float occ = 0.0;
-//     float sca = 1.0;
-//     for( int i=ZERO; i<5; i++ )
-//     {
-//         float hr = 0.01 + 0.12*float(i)/4.0;
-//         vec3 aopos =  nor * hr + pos;
-//         float dd = map( aopos ).x;
-//         occ += -(dd-hr)*sca;
-//         sca *= 0.95;
-//     }
-//     return clamp( 1.0 - 3.0*occ, 0.0, 1.0 );    
-// }
 
 // ------- Rotate Operations ------- //
 mat3 rotateX(float theta) {
@@ -139,11 +127,28 @@ vec3 opCheapBend(vec3 p)
     return  vec3(m*p.xy,p.z);
 }
 
+float opDisplace(vec3 p)
+{
+  float total = floor(p.x*float(u_Dimensions.x)) +
+        floor(p.y*float(u_Dimensions.y));
+  bool isEven = mod(total, 2.0)==0.0;
+  return (isEven)? 0.4:0.1;
+}
+
 // ------- Toolbox Functions ------- //
 float impulse( float k, float x )
 {
     float h = k*x;
     return h*exp(1.0-h);
+}
+
+
+float cubicPulse( float c, float w, float x )
+{
+    x = abs(x - c);
+    if( x > w ) return 0.0;
+    x /= w;
+    return 1.0 - x*x*(3.0-2.0*x);
 }
 
 float square_wave(float x, float freq, float amplitude) {
@@ -158,10 +163,7 @@ vec3 preProcessPnt(vec3 pnt, mat3 rotation) {
   return new_pnt - centerOffset;
 }
 
-// This is the distance field function.  The distance field represents the closest distance to the surface
-// of any object we put in the scene.  If the given point (point p) is inside of an object, we return a
-// negative answer.
-float sceneSDF(vec3 og_pnt) { // map fctn
+float sceneSDF(vec3 og_pnt) {
 
 	vec3 pnt = preProcessPnt(og_pnt, rotateX(1.57));
 	float timeVar =sin(u_Bikespeed * 0.3 * u_Time); 
@@ -177,6 +179,7 @@ float sceneSDF(vec3 og_pnt) { // map fctn
   float wheel2 = sdTorus(pnt  + timeOffset - vec3(0.0, 0.0, 3.2), vec2(1.0 +  wheelSizeOffset, 0.2));
   float pipe2 = sdCapsule(pnt + timeOffset - vec3(2.0, 0.0, 1.0), vec3(-1.0, 0.0, 0.0), vec3(-2.0, 0.0, 2.2), 0.2);
 
+  // Combine components using Operations
   float headlight = opI(sdBox(pnt - timeOffset + vec3(1.7, 0.0, 0.0), vec3(0.6, 0.6, 0.6)),
   											sdSphere(pnt - timeOffset + vec3(2.2, 0.0, 0.0), 0.4));
 
@@ -191,15 +194,15 @@ float sceneSDF(vec3 og_pnt) { // map fctn
   res = opU(res, wheel2);
   res = opU(res, pipe1);
   res = opU(res, pipe2);
-  // res = opU(res, neck);
+
+  plane_dist = sdPlane(pnt - vec3(0.0, 0.0, 10.0), vec4(0.0, 0.0, -1.0, -1.0));
 
   float plane = sdPlane(pnt - vec3(0.0, 0.0, 10.0), vec4(0.0, 0.0, -1.0, -1.0));
   res = opU(res, plane);
-
 	for (int i = 0; i < 30; i++)  {
 		float block_bool = square_wave(1.0, 1.0, 5.0);
 		float x_displacement = -30.0 + block_bool * 1.2 * float(i) + mod(u_Time, 10.0) * u_Bikespeed/2.0;
-  	float block = sdBox(pnt - vec3(x_displacement, 0.0, 7.0) , vec3(1.0, 1.0, 0.4));
+  	float block = sdBox(pnt - vec3(x_displacement, 0.0, 7.0) , vec3(1.0, 1.0, 0.2));
   	res = opU(res, block);
 	} 
 
@@ -208,8 +211,14 @@ float sceneSDF(vec3 og_pnt) { // map fctn
 
 float raymarch(vec3 eye, vec3 marchingDirection, float start, float end) { // aymarch fntn ray orient, ray dir
 
-	//end-=sin(sqrt(fs_Pos.x * fs_Pos.x + fs_Pos.y * fs_Pos.y) - u_Time * 6.);/// * 0.000096;
 	float depth = start;
+
+ 	if (!antlerGoopBoundingBox(marchingDirection, eye, dist)) {
+    return 100000.0;
+  }
+  if (!boxGoopBoundingBox(marchingDirection, eye, dist)) {
+    return 100000.0;
+  }
 
 	for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
 		vec3 pnt = eye + depth * marchingDirection;
@@ -217,9 +226,9 @@ float raymarch(vec3 eye, vec3 marchingDirection, float start, float end) { // ay
 
 		if (dist < EPSILON) { // inside scene surface
 
-			if (dist  == sdPlane(preProcessPnt(pnt, rotateX(1.57)) - vec3(0.0, 0.0, 10.0), vec4(0.0, 0.0, -1.0, -1.0))) {
+			if (dist  == plane_dist) {
 				IS_PLANE = 1;
-			}
+			} 
 			return depth;
 		}
 
@@ -262,91 +271,56 @@ vec3 calculateRayMarchPoint() {
 	return p;
 }
 
+// Creat striped texture on the ground
+vec4 createFloorTexture(vec3 p) {
 
-// vec3 background(vec3 d )
-// {
-//     // cheap cubemap
-//     vec3 n = abs(d);
-//     vec2 uv = (n.x>n.y && n.x>n.z) ? d.yz/d.x: 
-//               (n.y>n.x && n.y>n.z) ? d.zx/d.y:
-//                                      d.xy/d.z;
-    
-//     // fancy blur
-//     vec3  col = vec3( 0.0 );
-//     for( int i=1; i<200; i++ )
-//     {
-//         float h = float(i)/200.0;
-//         float an = 31.0*6.2831*h;
-//         vec2  of = vec2( cos(an), sin(an) ) * h;
-
-//         vec3 tmp = vec3( uv*0.25 + 0.0075*of, 4.0 ).yxz;
-//         col = max(max( col, tmp), 0.5 );
-//     }
-    
-//     return pow(col,vec3(3.5,3.0,6.0))*0.2;
-// }
-
-// float gain(float x, float k) 
-// {
-//     float a = 0.5*pow(2.0*((x<0.5)?x:1.0-x), k);
-//     return (x<0.5)?a:1.0-a;
-// }
-
-// vec4 applyTexture(vec4 col) {
-// 	return vec4(gain(col.x,0.5), gain(col.y, 0.5), gain(col.z, 0.5), 1.0);
-// }
-
-vec3 ProceduralTexture(vec2 uv){
-	vec2 pt = 2.0 * uv - 1.0;
-	return vec3(length(pt));
+		float total = floor(p.x*float(u_Dimensions.x));
+		bool isEven = mod(total, 10.0)==0.0;
+		// float block_bool = square_wave(1.0, 1.0, 5.0);
+		// bool isEven = mod(p.x, block_bool)==0.0;
+		vec4 col1 = vec4(225.0/255.0, 225.0/255.0, 10.0/255.0, 1.0);
+		vec4 col2 = vec4(136.0/255.0, 206.0/255.0, 235.0/255.0, 1.0);
+		return (isEven)? col1:col2;
 }
-
 
 void main() {
 
 	IS_PLANE = 0;
-	float ambiance = 0.3;
+	float ambiance = 0.1;
 
-	// vec2 uv = gl_FragCoord.xy / u_Dimensions;
-	// if (uv.y < 0.2) {
-	// 	vec2 pt = 2.0 * uv - 1.0;
-	// 	//pt.x *= u_Dimensions.x / u_Dimensions.y;
-	// 	pt.x = mod(u_Dimensions.x, u_Time * 2.0) ;
-	// 	pt.y += 0.75;
-	// 	float inside = float(length(pt) < 0.2);
-
-	// 	out_Col = vec4(vec3(inside), 1);
-	// 	return;
-	// }
 	//***  Set up Ray Direction  ***//
 	vec3 p = calculateRayMarchPoint();
 	vec3 dir = normalize(p - u_Eye);
 
   //***  Ray Marching  ***//
 	float dist = raymarch(u_Eye, dir, MIN_DIST, MAX_DIST);
-  if (IS_PLANE == 1) {
-  	out_Col = vec4(0.2, 0.2, 0.2, 1.0);
-  	return;
-  }
-
+ 	
   vec3 lightDirection = normalize(vec3(fs_LightVec.xyz));
 
   if (dist <= MAX_DIST - EPSILON) {
-    // Hit Something!
+
+  	vec4 bike_col = vec4(0.4, 0.4, 0.4, 1.0);
+		vec4 floor_col = createFloorTexture(p);
+		
+		// Calcualte lighting
     vec3 n = estimateNormal(u_Eye + dist * dir);
     float light = dot(-fs_LightVec.xyz, n); // Lambertian Reflective Lighting
-    vec4 col = vec4(0.1, 0.1, 0.1, 1.0);
+
     if (u_Lighting > 0.0) {
-    	out_Col = col * light * ambiance + vec4(0.1, 0.2, 0.4, 0.1);
+    	out_Col = bike_col * light * ambiance;
+    	if (IS_PLANE == 1) {	
+				  out_Col = floor_col;
+  		}
     } else {
-    	out_Col = vec4(n, 1);
+    	out_Col = bike_col * vec4(n, 1);
+    	if (IS_PLANE == 1) {
+  			out_Col = floor_col * vec4(n, 1);
+  		}
     }
 		return;
   }
 
-
 	vec3 base_col = 0.5 * (dir + vec3(1.0, 1.0, 1.0));
-  // vec3 base_col = vec3(0.7, 0.6, 0.0); 
   out_Col = vec4(base_col, 1.0); 
 
 }

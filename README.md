@@ -38,14 +38,13 @@ Implementation Details
 * Animation of Scene
   1. The position of the bike was animiated using sin functions (toolbox function #1)
   2. The wheel sizes were animated 
-	3. The Rode surface markings were procedurally generated and placed using square wave (toolbox function #2).
+	3. The Road surface markings were procedurally generated and placed using square wave (toolbox function #2).
 		 Where the output of the square wave is greater than 0, a block was placed and vice versa,
 	   to achieve the effect of markings made in regular intervals. 
 
 * Procedural texturing using toolbox functions and/or noise functions:
-	Road surface marking were generated using square wave. 
-	Where the output of the square wave is greater than 0, a block was placed and vice versa,
-	to achieve the effect of markings made in regular intervals.
+	As explained above, the animated road surface markings created by blocks use square waves and count as texture (confirmed by TA).
+	Additionally, the plain was given texture with striped pattern to give a more dreamy effect.
 
 * Shading
 	Basic lambert reflective shading 
