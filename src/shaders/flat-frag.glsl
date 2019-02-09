@@ -19,7 +19,6 @@ const float MAX_DIST = 100.0;
 const float EPSILON = 0.0001;
 int IS_PLANE;
 
-
 // ------- Primatives ------- //
 // All taken from IQ: http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
 
@@ -55,7 +54,6 @@ float sdBox( vec3 p, vec3 b )
          + min(max(d.x,max(d.y,d.z)),0.0); // remove this line for an only partially signed sdf 
 }
 
-
 float sdCapsule( vec3 p, vec3 a, vec3 b, float r )
 {
     vec3 pa = p - a, ba = b - a;
@@ -68,6 +66,22 @@ float sdPlane( vec3 p, vec4 n )
   // n must be normalized
   return dot(p,n.xyz) + n.w;
 }
+
+
+// float calcAO(vec3 pos, vec3 nor )
+// {
+// 	float occ = 0.0;
+//     float sca = 1.0;
+//     for( int i=ZERO; i<5; i++ )
+//     {
+//         float hr = 0.01 + 0.12*float(i)/4.0;
+//         vec3 aopos =  nor * hr + pos;
+//         float dd = map( aopos ).x;
+//         occ += -(dd-hr)*sca;
+//         sca *= 0.95;
+//     }
+//     return clamp( 1.0 - 3.0*occ, 0.0, 1.0 );    
+// }
 
 // ------- Rotate Operations ------- //
 mat3 rotateX(float theta) {
@@ -105,13 +119,16 @@ mat3 rotateZ(float theta) {
 
 float opU( float d1, float d2 ) { return min(d1,d2); }
 
-float opS( float d1, float d2 ) { return max(-d1,d2); }
-
 float opI( float d1, float d2 ) { return max(d1,d2); }
 
 float opSmoothUnion( float d1, float d2, float k ) {
   float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
   return mix( d2, d1, h ) - k*h*(1.0-h); 
+}
+
+float opSmoothSubtraction( float d1, float d2, float k ) {
+    float h = clamp( 0.5 - 0.5*(d2+d1)/k, 0.0, 1.0 );
+    return mix( d2, -d1, h ) + k*h*(1.0-h); 
 }
 
 vec3 opCheapBend(vec3 p)
@@ -120,19 +137,6 @@ vec3 opCheapBend(vec3 p)
     float s = sin(0.5*p.y);
     mat2  m = mat2(c,-s,s,c);
     return  vec3(m*p.xy,p.z);
-}
-
-vec3 opTwist( vec3 p )
-{
-    float  c = cos(10.0*p.y+10.0);
-    float  s = sin(10.0*p.y+10.0);
-    mat2   m = mat2(c,-s,s,c);
-    return vec3(m*p.xz,p.y);
-}
-
-float opOnion( in float sdf, in float thickness )
-{
-    return abs(sdf)-thickness;
 }
 
 // ------- Toolbox Functions ------- //
@@ -148,8 +152,8 @@ float square_wave(float x, float freq, float amplitude) {
 
 // ------- SDF & Ray Marching Core Functions ------- //
 
-vec3 preProcessPnt(vec3 pnt) {
-	vec3 new_pnt = rotateX(1.57) *pnt;
+vec3 preProcessPnt(vec3 pnt, mat3 rotation) {
+	vec3 new_pnt = rotation * pnt;
   vec3 centerOffset = vec3(-2.0, 0.0, 0.0);
   return new_pnt - centerOffset;
 }
@@ -157,30 +161,37 @@ vec3 preProcessPnt(vec3 pnt) {
 // This is the distance field function.  The distance field represents the closest distance to the surface
 // of any object we put in the scene.  If the given point (point p) is inside of an object, we return a
 // negative answer.
-float sceneSDF(vec3 pnt) { // map fctn
+float sceneSDF(vec3 og_pnt) { // map fctn
 
-	pnt = preProcessPnt(pnt);
+	vec3 pnt = preProcessPnt(og_pnt, rotateX(1.57));
 	float timeVar =sin(u_Bikespeed * 0.3 * u_Time); 
 	vec3 timeOffset = vec3(0.0, 0.0, timeVar * 0.1);
 	float wheelSizeOffset = u_Bikespeed * timeVar * -0.2;
 
   // Define Components and Position
-  float handle = opSmoothUnion(sdSphere(pnt - timeOffset + vec3(1.5, 0.0, 0.0), 1.0), 
-  														 sdRoundedCylinder(pnt - timeOffset + vec3(1.5, 0.0, 0.0), 0.1, 0.1, 2.0), 0.7);
-  float neck = sdRoundBox(rotateY(-0.3) * opCheapBend(pnt) - timeOffset - vec3(0.0, 0.0, 0.5), vec3(1.0, 0.2, 0.0), 0.3);
+  float neck = sdRoundBox(rotateY(-0.3) * opCheapBend(pnt) - timeOffset - vec3(0.0, 0.0, 0.5), vec3(0.8, 0.2, 0.0), 0.3);
   float wheel1 = sdTorus(pnt + timeOffset - vec3(4.0, 0.0, 3.2), vec2(1.0 + wheelSizeOffset, 0.2));
   float pipe1 = sdCapsule(pnt + timeOffset - vec3(2.0, 0.0, 1.0), vec3(2.0, 0.0, 2.2), vec3(1.0, 0.0, 0.0), 0.2);
-  float seat = sdRoundBox(pnt - timeOffset - vec3(2.0, 0.0, 1.0), vec3(1.0, 0.3, 0.0), 0.7);
+  float seatBase = sdRoundBox(pnt - timeOffset - vec3(2.0, 0.0, 1.0), vec3(1.0, 0.3, 0.0), 0.7);
+  float seatSurr = sdRoundBox((pnt- timeOffset - vec3(2.1, 0.0, -0.3)) * rotateX(1.57), vec3(0.2, 0.3, 0.4), 0.8);									
   float wheel2 = sdTorus(pnt  + timeOffset - vec3(0.0, 0.0, 3.2), vec2(1.0 +  wheelSizeOffset, 0.2));
   float pipe2 = sdCapsule(pnt + timeOffset - vec3(2.0, 0.0, 1.0), vec3(-1.0, 0.0, 0.0), vec3(-2.0, 0.0, 2.2), 0.2);
 
+  float headlight = opI(sdBox(pnt - timeOffset + vec3(1.7, 0.0, 0.0), vec3(0.6, 0.6, 0.6)),
+  											sdSphere(pnt - timeOffset + vec3(2.2, 0.0, 0.0), 0.4));
 
-  float res = opU(handle, wheel1); 
+  float handle = opSmoothUnion(sdSphere(pnt - timeOffset + vec3(1.3, 0.0, 0.0), 0.9), 
+  														 sdRoundedCylinder(pnt - timeOffset + vec3(1.5, 0.0, 0.0), 0.1, 0.1, 1.8), 0.7);
+  float seat = opSmoothSubtraction(seatSurr, seatBase, 0.2);
+
+  float res = opSmoothUnion(seat, neck, 0.4);
+  res = opU(res, handle);
+  res = opU(res, headlight);
+  res = opU(res, wheel1); 
   res = opU(res, wheel2);
-  res = opU(res, seat);
   res = opU(res, pipe1);
   res = opU(res, pipe2);
-  res = opU(res, neck);
+  // res = opU(res, neck);
 
   float plane = sdPlane(pnt - vec3(0.0, 0.0, 10.0), vec4(0.0, 0.0, -1.0, -1.0));
   res = opU(res, plane);
@@ -206,7 +217,7 @@ float raymarch(vec3 eye, vec3 marchingDirection, float start, float end) { // ay
 
 		if (dist < EPSILON) { // inside scene surface
 
-			if (dist  == sdPlane(preProcessPnt(pnt) - vec3(0.0, 0.0, 10.0), vec4(0.0, 0.0, -1.0, -1.0))) {
+			if (dist  == sdPlane(preProcessPnt(pnt, rotateX(1.57)) - vec3(0.0, 0.0, 10.0), vec4(0.0, 0.0, -1.0, -1.0))) {
 				IS_PLANE = 1;
 			}
 			return depth;

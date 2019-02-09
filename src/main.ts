@@ -84,7 +84,7 @@ function main() {
   let prevBikespeed = 2.0;
   let prevSpeed_type = 'Medium';
   let prevLighting = 4;
-  let prevLighting_type = 'Medium';
+  let prevLighting_type = 'Yes';
   let time = 0;
 
   // This function will be called every frame
@@ -112,6 +112,7 @@ function main() {
           break;
         case "Low":
           bikespeed = 1.0;
+          break;
         case "Stop":
           bikespeed = 0.0;
           break;
