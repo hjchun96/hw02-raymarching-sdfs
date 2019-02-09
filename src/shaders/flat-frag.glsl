@@ -11,6 +11,11 @@ in vec2 fs_Pos;
 in vec4 fs_LightVec;
 out vec4 out_Col;
 
+// Cube Struct for BBox
+struct Cube {
+	vec3 min;
+	vec3 max;
+};
 
 // ------- Constants ------- //
 const int MAX_MARCHING_STEPS = 255;
@@ -69,7 +74,6 @@ float sdPlane( vec3 p, vec4 n )
   // n must be normalized
   return dot(p,n.xyz) + n.w;
 }
-
 
 // ------- Rotate Operations ------- //
 mat3 rotateX(float theta) {
@@ -155,6 +159,53 @@ float square_wave(float x, float freq, float amplitude) {
 	return abs(mod(floor(x * freq), 2.0)* amplitude);
 }
 
+
+// ------- BVH Optimization Functions ------- //
+
+bool rayCubeIntersect(vec3 eye, vec3 dir, Cube cube) {
+
+	float tnear = -500.0;
+	float tfar = 500.0;
+
+	for (int i = 0; i < 3; i++) {
+		if (eye[i] == 0.0) {
+			if (eye[i] < cube.min[i] || eye[i] > cube.max[i]) {
+				return false;
+			}
+		}
+
+		float t0 = (cube.min[i] - eye[i]) / dir[i];
+		float t1 = (cube.max[i] - eye[i]) / dir[i];
+		if (t0 > t1) {
+			float tmp = t0;
+			t0 = t1;
+			t1 = tmp;
+		}
+		tnear = max(t0, tnear);
+		tfar = min(t1, tfar);
+	}
+
+	if (tnear > tfar) {
+		return false;
+	}
+	return true;
+}
+
+Cube createBikeCube() {
+	Cube cube;
+	cube.min = vec3(-4.0, -5.0, -3.0);
+	cube.max = vec3(3.0, 5.0, 3.0);
+	return cube;
+}
+
+Cube createBlockCube() {
+	Cube cube;
+	cube.min = vec3(-30.0, -1.0, -30.0);
+	cube.max =  vec3(30.0, 1.0, 30.0);
+	return cube;
+}
+
+
 // ------- SDF & Ray Marching Core Functions ------- //
 
 vec3 preProcessPnt(vec3 pnt, mat3 rotation) {
@@ -209,35 +260,30 @@ float sceneSDF(vec3 og_pnt) {
   return res;
 }
 
-float raymarch(vec3 eye, vec3 marchingDirection, float start, float end) { // aymarch fntn ray orient, ray dir
+float raymarch(vec3 eye, vec3 raymarchDir, float start, float end) {// eye = ray orientation
+
+	//BVH Optimziation
+	Cube objectCube = createBikeCube();
+	Cube floorCube = createBlockCube();
+	bool hitCube = rayCubeIntersect(eye, raymarchDir, objectCube);
+	bool hitPlane = rayCubeIntersect(eye, raymarchDir, floorCube);
+	if (!hitPlane && ! hitCube) return end;
 
 	float depth = start;
-
- 	if (!antlerGoopBoundingBox(marchingDirection, eye, dist)) {
-    return 100000.0;
-  }
-  if (!boxGoopBoundingBox(marchingDirection, eye, dist)) {
-    return 100000.0;
-  }
-
 	for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
-		vec3 pnt = eye + depth * marchingDirection;
+		vec3 pnt = eye + depth * raymarchDir;
 		float dist = sceneSDF(pnt);
 
-		if (dist < EPSILON) { // inside scene surface
-
+		if (dist < EPSILON) { 
 			if (dist  == plane_dist) {
 				IS_PLANE = 1;
 			} 
 			return depth;
 		}
-
 		depth += dist; // Move along the view ray, spheremarch optimization
-
 		if (depth >= end) { // abort
 			return end;
 		}
-
 	}
 	return end;
 }
@@ -250,6 +296,7 @@ vec3 estimateNormal(vec3 p) {
         sceneSDF(vec3(p.x, p.y, p.z  + EPSILON)) - sceneSDF(vec3(p.x, p.y, p.z - EPSILON))
     ));
 }
+
 
 // ------- Ray March Direction Calc ------- //
 vec3 calculateRayMarchPoint() {
@@ -274,10 +321,13 @@ vec3 calculateRayMarchPoint() {
 // Creat striped texture on the ground
 vec4 createFloorTexture(vec3 p) {
 
+		bool use_sqfctn = false;
 		float total = floor(p.x*float(u_Dimensions.x));
 		bool isEven = mod(total, 10.0)==0.0;
-		// float block_bool = square_wave(1.0, 1.0, 5.0);
-		// bool isEven = mod(p.x, block_bool)==0.0;
+		if (use_sqfctn) { 
+			float block_bool = square_wave(p.x, 300.0, 1.0);
+			isEven =  block_bool==1.0;
+		}
 		vec4 col1 = vec4(225.0/255.0, 225.0/255.0, 10.0/255.0, 1.0);
 		vec4 col2 = vec4(136.0/255.0, 206.0/255.0, 235.0/255.0, 1.0);
 		return (isEven)? col1:col2;
