@@ -53,7 +53,7 @@ Implementation Details
 
 ### GUI Features
 * Bike Speed: The user can toggle the bike speed between Low, Medium, and High (default is Medium). This controls
-							the uniform float  `u_Bikespeed`.
+							the uniform float  `u_Bikespeed` that varies the visual effect of making the bike animate and look like it is passing the road dividers.
 * Lighting: The user can get rid of the lighting. This has the effect of changing the theme of the scene from 
 							looking like the bike is floating in the sky to riding on a grassy ground.
 
